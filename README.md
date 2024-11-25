@@ -42,7 +42,7 @@ rh-socket-system/
 
 1. Clonar el repositorio:
 ```bash
-git clone https://github.com/usuario/rh-socket-system.git
+git clone https://github.com/S4muelDP/rh_socket_system
 cd rh-socket-system
 ```
 

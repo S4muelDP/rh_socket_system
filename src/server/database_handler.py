@@ -40,17 +40,23 @@ class DatabaseHandler:
 
             # Insertar empleado
             insert_query = """
-                INSERT INTO empleados (
-                    primer_nombre, segundo_nombre, primer_apellido, 
-                    segundo_apellido, email, celular, 
-                    fecha_contratacion, departamento_id, cargo_id
-                ) VALUES (
-                    %(primer_nombre)s, %(segundo_nombre)s, %(primer_apellido)s,
-                    %(segundo_apellido)s, %(email)s, %(celular)s,
-                    %(fecha_contratacion)s, %(departamento_id)s, %(cargo_id)s
-                )
+            INSERT INTO empleados (
+                primer_nombre, segundo_nombre, primer_apellido, segundo_apellido,
+                email, celular, fecha_contratacion, departamento_id, cargo_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(insert_query, data)
+            insert_values = (
+                data['primer_nombre'],
+                data['segundo_nombre'],
+                data['primer_apellido'],
+                data['segundo_apellido'],
+                data['email'],
+                data['celular'],
+                data['fecha_contratacion'],
+                data['departamento_id'],
+                data['cargo_id']
+            )
+            cursor.execute(insert_query, insert_values)
             employee_id = cursor.lastrowid
 
             # Insertar salario

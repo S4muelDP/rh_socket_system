@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO,
 
 
 class Client:
-    def __init__(self, host='localhost', port=5000):
+    def __init__(self, host='localhost', port=33056):
         self.host = host
         self.port = port
         self.socket = None
@@ -59,6 +59,7 @@ class Client:
         }
 
         response = self.send_request('INSERT', data)
+        print(data)
         print("\nRespuesta:", response)
 
     def update_employee(self):
