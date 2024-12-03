@@ -1,9 +1,9 @@
+import json
 import mysql.connector
 import configparser
 import os
 import logging
-from datetime import datetime
-
+from datetime import datetime, date
 
 class DatabaseHandler:
     def __init__(self):
@@ -38,7 +38,6 @@ class DatabaseHandler:
             self._ensure_connection()
             cursor = self.connection.cursor(dictionary=True)
 
-            # Insertar empleado
             insert_query = """
             INSERT INTO empleados (
                 primer_nombre, segundo_nombre, primer_apellido, segundo_apellido,
@@ -59,7 +58,6 @@ class DatabaseHandler:
             cursor.execute(insert_query, insert_values)
             employee_id = cursor.lastrowid
 
-            # Insertar salario
             if 'salario' in data:
                 salary_query = """
                     INSERT INTO salarios (
@@ -96,7 +94,6 @@ class DatabaseHandler:
 
             employee_id = data.pop('id')
 
-            # Construir query dinámica de actualización
             update_fields = []
             update_values = {}
 
@@ -114,7 +111,6 @@ class DatabaseHandler:
                 update_values['employee_id'] = employee_id
                 cursor.execute(update_query, update_values)
 
-            # Actualizar salario si está presente
             if 'salario' in data:
                 salary_query = """
                     UPDATE salarios
@@ -172,46 +168,76 @@ class DatabaseHandler:
             cursor.execute(query, params)
             result = cursor.fetchall()
 
+            logging.info(f"Resultados de la consulta: {result}")  # Agregado
+
             return {'status': 'success', 'data': result}
 
         except mysql.connector.Error as err:
             return {'status': 'error', 'message': str(err)}
-        finally:
-            cursor.close()
+        except Exception as e:
+            return {'status': 'error ', 'message': str(e)}
 
     def delete_employee(self, data):
         try:
             self._ensure_connection()
-            cursor = self.connection.cursor(dictionary=True)
+            cursor = self.connection.cursor()
 
-            # Primero insertar en históricos
-            historic_query = """
-                INSERT INTO historicos (empleado_id, fecha_retiro, motivo)
-                VALUES (%(id)s, %(fecha_retiro)s, %(motivo)s)
-            """
-            historic_data = {
-                'id': data['id'],
-                'fecha_retiro': datetime.now().date(),
-                'motivo': data.get('motivo', 'No especificado')
-            }
-            cursor.execute(historic_query, historic_data)
+            fecha_retiro = datetime.now().date()
 
-            # Luego marcar como inactivo en empleados
+            self.connection.start_transaction()
+
             update_query = """
-                UPDATE empleados
-                SET estado = FALSE
-                WHERE id = %(id)s
+            UPDATE empleados 
+            SET 
+                estado = 0, 
+                updated_at = %s 
+            WHERE id = %s
             """
-            cursor.execute(update_query, {'id': data['id']})
+
+            cursor.execute(update_query, (
+                datetime.now(),
+                data['id']
+            ))
+
+            insert_historico_query = """
+            INSERT INTO historicos (
+                empleado_id, 
+                fecha_retiro, 
+                motivo
+            ) VALUES (%s, %s, %s)
+            """
+
+            cursor.execute(insert_historico_query, (
+                data['id'],
+                fecha_retiro,
+                data.get('motivo', '')
+            ))
 
             self.connection.commit()
-            return {'status': 'success', 'message': 'Empleado dado de baja correctamente'}
+
+            if cursor.rowcount > 0:
+                return {
+                    'status': 'success',
+                    'message': 'Empleado dado de baja exitosamente',
+                    'rows_affected': cursor.rowcount
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': 'No se encontró el empleado o no se pudo dar de baja'
+                }
 
         except mysql.connector.Error as err:
             self.connection.rollback()
+            logging.error(f"Error en la base de datos: {err}")
             return {'status': 'error', 'message': str(err)}
+        except Exception as e:
+            self.connection.rollback()
+            logging.error(f"Error inesperado: {e}")
+            return {'status': 'error', 'message': str(e)}
         finally:
-            cursor.close()
+            if cursor:
+                cursor.close()
 
     def __del__(self):
         if self.connection and self.connection.is_connected():

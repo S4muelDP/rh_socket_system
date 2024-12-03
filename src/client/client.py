@@ -1,13 +1,27 @@
 import socket
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
+class CustomJSONDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
+    def object_hook(self, obj):
+        for key, value in obj.items():
+            if isinstance(value, str):
+                try:
+                    obj[key] = datetime.fromisoformat(value)
+                except ValueError:
+                    try:
+                        obj[key] = date.fromisoformat(value)
+                    except ValueError:
+                        pass
+        return obj
 
-class Client:
+class Cliente:
     def __init__(self, host='localhost', port=33056):
         self.host = host
         self.port = port
@@ -19,22 +33,33 @@ class Client:
             self.socket.connect((self.host, self.port))
             logging.info("Conectado al servidor exitosamente")
         except Exception as e:
-            logging.error(f"Error conectando al servidor: {e}")
+            logging.error(f"Error de conexión: {e}")
             raise
 
     def send_request(self, operation, data):
         if not self.socket:
             self.connect()
 
-        request = {
-            'operation': operation,
-            'data': data
-        }
-
         try:
-            self.socket.send(json.dumps(request).encode('utf-8'))
-            response = self.socket.recv(4096).decode('utf-8')
-            return json.loads(response)
+            request = {
+                'operation': operation,
+                'data': data
+            }
+
+            request_json = json.dumps(request)
+            self.socket.send(request_json.encode('utf-8'))
+
+            response_data = self.socket.recv(4096).decode('utf-8')
+
+            logging.debug(f"Respuesta recibida: {response_data}")
+
+            try:
+                response = json.loads(response_data, cls=CustomJSONDecoder)
+                return response
+            except json.JSONDecodeError:
+                logging.error(f"Error decodificando JSON: {response_data}")
+                return {'status': 'error', 'message': 'Respuesta inválida del servidor'}
+
         except Exception as e:
             logging.error(f"Error en la comunicación: {e}")
             return {'status': 'error', 'message': str(e)}
@@ -100,13 +125,13 @@ class Client:
 
         response = self.send_request('SELECT', data)
 
-        if response['status'] == 'success':
+        if response.get('status') == 'success':
             for employee in response['data']:
                 print("\nDatos del empleado:")
                 for key, value in employee.items():
                     print(f"{key}: {value}")
         else:
-            print("\nError:", response['message'])
+            print("\nError:", response.get('message', 'Error desconocido'))
 
     def delete_employee(self):
         print("\n=== Dar de Baja Empleado ===")
@@ -156,7 +181,7 @@ class Client:
 
 
 if __name__ == '__main__':
-    client = Client()
+    client = Cliente()
     try:
         client.main_menu()
     except KeyboardInterrupt:
